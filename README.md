@@ -42,7 +42,7 @@ bmpx、bmpy：位图尺寸；
 
 位图示例格式：
 
-![位图格式](https://raw.githubusercontent.com/RagingWaves/OLEDLib-SSD1306/develop/%E4%BD%8D%E5%9B%BE%E6%A0%BC%E5%BC%8F.png?token=AKVGV4RRDMAZYTMFDWOX2XLBIQBBQ)
+![位图格式](位图格式.png)
 
 
 
