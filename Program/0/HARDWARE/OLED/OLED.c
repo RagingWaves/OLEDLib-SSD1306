@@ -1,27 +1,28 @@
 #include "OLED.h"
 #include "Font.h"
+#include "stdarg.h"
 
 char GRAM[1024]={0};
 
-void WriteCmd(u8 Cmd)
+void WriteCmd(u8 Cmd)		//发送命令
 {
-	GPIO_ResetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);
-	GPIO_ResetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);//命令
+	GPIO_ResetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);	//CS引脚置0
+	GPIO_ResetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);	//DC引脚置0
 	SPI2_ReadWriteByte(Cmd);
-	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);
-	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);
+	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);		//CS引脚置1
+	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);		//DC引脚置1
 }
 
-void WriteDat(u8 Data)
+void WriteDat(u8 Data)		//发送数据
 {
-	GPIO_ResetBits(OLED_CS_GPIO_PORT, OLED_CS_GPIO_PIN);
-	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);
+	GPIO_ResetBits(OLED_CS_GPIO_PORT, OLED_CS_GPIO_PIN);		//CS引脚置0
+	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);		//DC引脚置1
 	SPI2_ReadWriteByte(Data);
-	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);
-	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);
+	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);		//CS引脚置1
+	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);		//DC引脚置1
 }
 
-void OLED_SetPos(unsigned char page, unsigned char seg) //设置起始点坐标
+void OLED_SetPos(unsigned char page, unsigned char seg)			//设置行、页
 { 
 	WriteCmd(0xB0+page);
 	WriteCmd((seg&0x0F)|0x00);
@@ -54,42 +55,210 @@ void OLED_DBMP(int x0, int y0, int bmpx, int bmpy, const char *bmp)
 	}
 }
 
-void OLED_PStr(int x0, int y0, char *str, int FSize)
+int OLED_FSizeSta(int set, int size)	//储存字体大小状态
+{
+	static int sta=0;
+	if(set)
+		sta = size;
+	return sta;
+}
+
+void OLED_FSize(int size)
+{
+	OLED_FSizeSta(1, size);
+}
+
+void OLED_PStr(int x0, int y0, const char *str)
 {
 	int ch;
 	int i=0;
 	
-	if(FSize)
+	if(OLED_FSizeSta(0,0))
 	{
 		for(i=0; str[i]!='\0'; i++)
 		{
-			ch = str[i] - 32;
-			OLED_DBMP(x0, y0, 8, 16, &ASCII8x16[ch*16]);
-			x0 += 8;
+			if(str[i] == '\n' || str[i] == '\r')
+			{
+				x0 = 0;
+				y0 += 16;
+				continue;
+			}
 			if(x0 >= 120)
 			{
 				x0 = 0;
 				y0 += 16;
 			}
+			ch = str[i] - 32;	//ASCII码与数组下标对齐
+			OLED_DBMP(x0, y0, 8, 16, &ASCII8x16[ch*16]);
+			x0 += 8;
 		}
 	}
 	else
 	{
 		for(i=0; str[i]!='\0'; i++)
 		{
-			ch = str[i] - 32;
-			OLED_DBMP(x0, y0, 6, 8, &ASCII6x8[ch*6]);
-			x0 += 6;
+			if(str[i] == '\n' || str[i] == '\r')
+			{
+				x0 = 0;
+				y0 += 8;
+				continue;
+			}
 			if(x0 >= 122)
 			{
 				x0 = 0;
 				y0 += 8;
 			}
+			ch = str[i] - 32;
+			OLED_DBMP(x0, y0, 6, 8, &ASCII6x8[ch*6]);
+			x0 += 6;
 		}
 	}
 }
 
-void OLED_DClean(void)
+void OLED_PCh(int x0, int y0, char ch)
+{
+	if(OLED_FSizeSta(0,0))
+	{
+		if(x0 >= 120)
+		{
+			x0 = 0;
+			y0 += 16;
+		}
+		ch -= 32;
+		OLED_DBMP(x0, y0, 8, 16, &ASCII8x16[ch*16]);
+		x0 += 8;
+	}
+	else
+	{
+		if(x0 >= 122)
+		{
+			x0 = 0;
+			y0 += 8;
+		}
+		ch -= 32;
+		OLED_DBMP(x0, y0, 6, 8, &ASCII6x8[ch*6]);
+		x0 += 6;
+	}
+}
+
+void OLED_printf(int x0, int y0, const char *str, ...)
+{
+	char buf[128]={0};
+	int i=0, n=0;
+	
+	//%s
+	char *ptstr;
+	char ptstri;
+	
+	//%d %f
+	int ptint;
+	int numn;
+	float ptfloat;
+	int ptfint;
+	int ptfflt;
+	
+	va_list ap;
+	__va_start(ap, str);
+	
+	while((str[i] != '\0')&&n<128)
+	{
+		if(str[i] == '%')
+		{
+			i++;
+			switch(str[i])
+			{
+				case 'c':
+					buf[n++] = __va_arg(ap, int);
+					i++;
+					continue;
+				case 's':
+					ptstr = __va_arg(ap, char*);
+					ptstri = 0;
+					while(ptstr[ptstri] != '\0')
+						buf[n++] = ptstr[ptstri++];
+					i++;
+					continue;
+				case 'd':
+					ptint = __va_arg(ap,int);
+					if(ptint == 0)
+					{
+						buf[n++] = '0';
+						i++;
+						continue;
+					}
+					if(ptint < 0)	//负号
+					{
+						buf[n++] = '-';
+						ptint = -ptint;
+					}
+					numn = 1000000000;	//int最大2^32
+					while(numn != 0)
+					{
+						if(ptint/numn)
+							buf[n++] = (char)(ptint/numn+48);			//ASCII码与数组下标对齐
+						if(ptint == 0)
+							buf[n++] = '0';
+						ptint %= numn;
+						numn /= 10;
+					}
+					i++;
+					continue;
+				case 'f':
+					ptfloat = __va_arg(ap,double);
+					if(ptfloat < 0)
+					{
+						buf[n++] = '-';
+						ptfloat = -ptfloat;
+					}
+					ptfint = (int)ptfloat;
+					ptfflt = (int)(100000*(ptfloat-ptfint));
+					if(ptfint == 0)										//打印整数
+						buf[n++] = '0';
+					else
+					{
+						numn = 1000000;
+						while(numn != 0)
+						{
+							if(ptfint/numn)
+								buf[n++] = (char)(ptfint/numn+48);
+							if(ptfint == 0)
+								buf[n++] = '0';
+							ptfint %= numn;
+							numn /= 10;
+						}
+					}
+					buf[n++] = '.';
+					if(ptfflt == 0)										//打印小数
+						buf[n++] = '0';
+					else
+					{
+						numn = 1000000;
+						while(numn != 0)
+						{
+							if(ptfflt/numn)
+								buf[n++] = (char)(ptfflt/numn+48);
+							if(ptfflt == 0)
+								buf[n++] = '0';
+							ptfflt %= numn;
+							numn /= 10;
+						}
+					}
+					if(ptfloat < 0)
+					{
+						buf[n++] = '-';
+						ptfloat = -ptfloat;
+					}
+					i++;
+					continue;
+			}
+		}
+		buf[n++] = str[i++];	//打印其他字符
+	}
+	
+	OLED_PStr(x0, y0, buf);
+}
+
+void OLED_DClean(void)	//清空缓存
 {
 	int i;
 	
@@ -121,7 +290,7 @@ void OLED_Clean(void)//清屏
 	}
 }
 
-void OLED_GPIO_Init(void)
+void OLED_GPIO_Init(void)	//引脚初始化
 {
 	GPIO_InitTypeDef GPIO_InitStructure;
 	
@@ -149,7 +318,7 @@ void OLED_GPIO_Init(void)
 	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);
 }
 
-void OLED_Init_Setting(void)
+void OLED_Init_Setting(void)	//设置初始化
 {
 	WriteCmd(0xAE); //关闭显示
 	
@@ -188,7 +357,7 @@ void OLED_Init_Setting(void)
 
 void OLED_Init(void)
 {
-	//SPI协议
+	//SPI
 	SPI2_Init(SPI_BaudRatePrescaler_16);
 	OLED_GPIO_Init();
 	GPIO_SetBits(OLED_CS_GPIO_PORT	, OLED_CS_GPIO_PIN);

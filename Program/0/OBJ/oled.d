@@ -32,3 +32,4 @@
 ..\obj\oled.o: ..\SYSTEM\SPI\SPI.h
 ..\obj\oled.o: ..\SYSTEM\sys\sys.h
 ..\obj\oled.o: ..\HARDWARE\OLED\Font.h
+..\obj\oled.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdarg.h

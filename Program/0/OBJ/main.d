@@ -29,6 +29,5 @@
 ..\obj\main.o: ..\STM32F10x_FWLib\inc\stm32f10x_usart.h
 ..\obj\main.o: ..\STM32F10x_FWLib\inc\stm32f10x_wwdg.h
 ..\obj\main.o: ..\STM32F10x_FWLib\inc\misc.h
-..\obj\main.o: ..\HARDWARE\LED\LED.h
 ..\obj\main.o: ..\HARDWARE\OLED\OLED.h
 ..\obj\main.o: ..\SYSTEM\SPI\SPI.h
