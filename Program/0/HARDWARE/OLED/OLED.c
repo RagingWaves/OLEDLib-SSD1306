@@ -36,8 +36,8 @@ void OLED_DBMP(int x0, int y0, int bmpx, int bmpy, const char *bmp)
 	int gx, gy=0;
 	
 	gcn = (y0/8)*128+x0;				//起始坐标
-	gcx = (x0+bmpx)>127?128-x0:bmpx;	//x有效尺寸
-	gcy = (y0+bmpy)>63?64-y0:bmpy;		//y有效尺寸
+	gcx = (x0+bmpx)>127?127-x0:bmpx;	//x有效尺寸
+	gcy = (y0+bmpy)>63?63-y0:bmpy;		//y有效尺寸
 	dely = y0%8;						//y偏移量
 	delly = 8-dely;
 	
@@ -83,7 +83,7 @@ void OLED_PStr(int x0, int y0, const char *str)
 				y0 += 16;
 				continue;
 			}
-			if(x0 > 120)
+			if(x0 >= 120)
 			{
 				x0 = 0;
 				y0 += 16;
@@ -103,7 +103,7 @@ void OLED_PStr(int x0, int y0, const char *str)
 				y0 += 8;
 				continue;
 			}
-			if(x0 > 122)
+			if(x0 >= 122)
 			{
 				x0 = 0;
 				y0 += 8;
@@ -146,14 +146,12 @@ void OLED_printf(int x0, int y0, const char *str, ...)
 	float ptfloat;
 	int ptfint;
 	int ptfflt;
-	int ptffs = 0; //小数长度
 	
 	va_list ap;
 	__va_start(ap, str);
 	
 	while((str[i] != '\0')&&n<128)
 	{
-		ptffs = 7;
 		if(str[i] == '%')
 		{
 			i++;
@@ -184,19 +182,17 @@ void OLED_printf(int x0, int y0, const char *str, ...)
 						ptint = -ptint;
 					}
 					numn = 1000000000;	//int最大2^32
-					while(numn > ptint)numn/=10;
 					while(numn != 0)
 					{
-						buf[n++] = (char)(ptint/numn+48);			//ASCII码与数组下标对齐
+						if(ptint/numn)
+							buf[n++] = (char)(ptint/numn+48);			//ASCII码与数组下标对齐
+						if(ptint == 0)
+							buf[n++] = '0';
 						ptint %= numn;
 						numn /= 10;
 					}
 					i++;
 					continue;
-				case '.':
-					if(str[i+2] != 'f')break;
-					ptffs = str[++i] - '0';
-					i++;
 				case 'f':
 					ptfloat = __va_arg(ap,double);
 					if(ptfloat < 0)
@@ -211,10 +207,12 @@ void OLED_printf(int x0, int y0, const char *str, ...)
 					else
 					{
 						numn = 1000000;
-						while(numn > ptfint)numn/=10;
 						while(numn != 0)
 						{
-							buf[n++] = (char)(ptfint/numn+48);
+							if(ptfint/numn)
+								buf[n++] = (char)(ptfint/numn+48);
+							if(ptfint == 0)
+								buf[n++] = '0';
 							ptfint %= numn;
 							numn /= 10;
 						}
@@ -225,10 +223,12 @@ void OLED_printf(int x0, int y0, const char *str, ...)
 					else
 					{
 						numn = 1000000;
-						while(numn > ptfflt)numn/=10;
-						while(numn != 0 && ptffs--)
+						while(numn != 0)
 						{
-							buf[n++] = (char)(ptfflt/numn+48);
+							if(ptfflt/numn)
+								buf[n++] = (char)(ptfflt/numn+48);
+							if(ptfflt == 0)
+								buf[n++] = '0';
 							ptfflt %= numn;
 							numn /= 10;
 						}
@@ -251,22 +251,33 @@ void OLED_printf(int x0, int y0, const char *str, ...)
 void OLED_DClean(void)	//清空缓存
 {
 	int i;
+	
 	for(i=0; i<1024; i++)
 		GRAM[i] = 0x00;
 }
 
 void OLED_Display(void)
 {
-	int i;
-	for(i = 0; i < 1024; i++)
-		WriteDat(GRAM[i]);
+	unsigned char page, seg;
+	
+	for(page = 0; page < 8; page++)
+	{
+		OLED_SetPos(page, 0x00);
+		for(seg = 0; seg < 128; seg++)
+			WriteDat(GRAM[page*128+seg]);
+	}
 }
 
 void OLED_Clean(void)//清屏
 {
-	int i;
-	for(i = 0; i < 1024; i++)
-		WriteDat(0x00);
+	unsigned char page, seg;
+	
+	for(page = 0; page < 8; page++)
+	{
+		OLED_SetPos(page, 0x00);
+		for(seg = 0; seg < 128; seg++)
+			WriteDat(0xFF);
+	}
 }
 
 void OLED_GPIO_Init(void)	//引脚初始化
@@ -302,7 +313,7 @@ void OLED_Init_Setting(void)	//设置初始化
 	WriteCmd(0xAE); //关闭显示
 	
 	WriteCmd(0x20); //设置内存地址模式    
-	WriteCmd(0x00); //[1:0]，00，水平地址模式;01，垂直地址模式;10,页地址模式;默认10;
+	WriteCmd(0x02); //[1:0]，00，列地址模式;01，行地址模式;10,页地址模式;默认10;
 	
 	WriteCmd(0xB0); //页地址模式，设置起始页0~7
 	WriteCmd(0x00); //---set low column address
@@ -343,7 +354,7 @@ void OLED_Init(void)
 	GPIO_SetBits(OLED_DC_GPIO_PORT	, OLED_DC_GPIO_PIN);
 	
 	//OLED屏初始化延时
-	//delay_ms(500);
+	delay_ms(500);
 
 	//OLED配置初始化
 	OLED_Init_Setting();

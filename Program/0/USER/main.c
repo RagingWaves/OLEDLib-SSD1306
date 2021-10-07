@@ -18,7 +18,10 @@ int main(void)
 		OLED_PCh(122,0,'A');
 		OLED_FSize(0);
 		OLED_printf(3,20,"c:%c%c%c\ns:%s\r\nd:%d\n",'j','k','l', "test",1234567890);
+		
+		
 		OLED_Display();
+		OLED_Clean();
 		delay_ms(500);
 	}
 }
